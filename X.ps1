@@ -1,11 +1,9 @@
-# กำหนดค่าเข้ารหัสของ Console ให้รองรับ UTF-8 (แก้ปัญหาตัวหนังสือภาษาไทยแสดงผลเป็นเครื่องหมายคำถาม / )
+# กำหนดค่าเข้ารหัสของ Console ให้เป็น UTF-8 และกำหนดโปรโตคอลความปลอดภัย TLS 1.2
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-
-# บังคับเปิดใช้งานโปรโตคอลความปลอดภัย TLS 1.2 สำหรับดาวน์โหลดไฟล์
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# ปิดการแจ้งเตือน Error ทั่วไปของระบบเพื่อความราบรื่นในการทำงาน
+# ปิดการแจ้งเตือน Error ทั่วไปเพื่อความราบรื่น
 $ErrorActionPreference = "SilentlyContinue"
 
 # ตรวจสอบสิทธิ์ผู้ดูแลระบบ (Administrator)
@@ -14,7 +12,7 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Break
 }
 
-# ฟังก์ชันแสดงผลหลอดโหลดแบบพรีเมียม (ไม่แสดงโค้ดทางเทคนิคหรือคำว่า .exe)
+# ฟังก์ชันแสดงผลหลอดโหลดแบบพรีเมียม (ใช้ข้อความภาษาอังกฤษเพื่อป้องกันปัญหาฟอนต์ภาษาไทยเพี้ยนในทุกเครื่อง)
 function Show-ProgressBar {
     param (
         [int]$Percent,
@@ -24,7 +22,7 @@ function Show-ProgressBar {
     $done = [Math]::Floor(($Percent / 100) * $width)
     $left = $width - $done
     $bar = ("█" * $done) + ("░" * $left)
-    # ล้างบรรทัดเก่าและเขียนใหม่แบบมีสีสันสวยงามและแสดงเปอร์เซ็นต์
+    # แสดงหลอดดาวน์โหลดและเปอร์เซ็นต์แบบคมชัดสวยงาม
     Write-Host "`r  $Status [$bar] $Percent%  " -NoNewline -ForegroundColor Cyan
 }
 
@@ -32,12 +30,12 @@ function Show-ProgressBar {
 Clear-Host
 Write-Host ""
 Write-Host "  ================================================" -ForegroundColor Cyan
-Write-Host "        กำลังเตรียมความพร้อมระบบ กรุณารอซักครู่" -ForegroundColor Yellow
+Write-Host "            SYSTEM OPTIMIZER & LOADER" -ForegroundColor Yellow
 Write-Host "  ================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ขั้นที่ 1: กำลังตรวจสอบระบบ (0% - 20%)
-Show-ProgressBar 0 "กำลังตรวจสอบความพร้อมระบบ..."
+Show-ProgressBar 0 "Initializing system..."
 Start-Sleep -Milliseconds 300
 
 # 1. ปิดโหมดประหยัดพลังงาน USB
@@ -53,7 +51,7 @@ if (Test-Path $USBEnumPath) {
         Set-ItemProperty -Path $_.PSPath -Name "DeviceSelectiveSuspended" -Value 0 -Type DWord -ErrorAction SilentlyContinue
     }
 }
-Show-ProgressBar 20 "กำลังปรับแต่งการเชื่อมต่อพอร์ต..."
+Show-ProgressBar 20 "Optimizing hardware settings..."
 Start-Sleep -Milliseconds 400
 
 # ขั้นที่ 2: คืนค่าและรีสตาร์ทบริการ (20% - 50%)
@@ -70,7 +68,7 @@ foreach ($Service in $ServicesToFix) {
     Set-Service -Name $Service -StartupType Automatic -ErrorAction SilentlyContinue
     Start-Service -Name $Service -ErrorAction SilentlyContinue
 }
-Show-ProgressBar 50 "กำลังตั้งค่าการตอบสนองระบบ..."
+Show-ProgressBar 50 "Configuring system services..."
 Start-Sleep -Milliseconds 400
 
 # ขั้นที่ 3: รีเฟรชไดรเวอร์ (50% - 75%)
@@ -84,7 +82,7 @@ foreach ($Device in $TargetDevices) {
 
 # 6. สแกนฮาร์ดแวร์ใหม่
 pnputil /scan-devices | Out-Null
-Show-ProgressBar 75 "กำลังเชื่อมต่อกับฐานข้อมูลระบบ..."
+Show-ProgressBar 75 "Connecting to server..."
 Start-Sleep -Milliseconds 400
 
 # ขั้นที่ 4: ดาวน์โหลด GUI (75% - 100%)
@@ -107,20 +105,15 @@ try {
     Invoke-WebRequest -Uri $Url -OutFile $DestPath -ErrorAction Stop
     Unblock-File -Path $DestPath -ErrorAction SilentlyContinue
     
-    Show-ProgressBar 100 "ระบบพร้อมใช้งาน! กำลังเปิดหน้าโปรแกรม..."
-    Write-Host ""
-    Write-Host ""
-    Write-Host "  [+] การตั้งค่าเสร็จสิ้น กำลังปิดหน้าต่างนี้ใน 2 วินาที..." -ForegroundColor Green
-    Write-Host "  ================================================" -ForegroundColor Cyan
+    Show-ProgressBar 100 "System ready! Launching GUI..."
     
     # เปิดโปรแกรม GUI พร้อมระบุโฟลเดอร์ทำงาน
     Start-Process -FilePath $DestPath -WorkingDirectory (Split-Path $DestPath) -Verb RunAs
     
-    # รอ 2 วินาทีก่อนปิดตัวลง
-    Start-Sleep -Seconds 2
+    # ปิดตัวลงทันทีโดยไม่มีการรอหน่วงเวลา (exit)
     exit
 }
 catch {
     Write-Host ""
-    Write-Host "  [x] การดาวน์โหลดล้มเหลว กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต" -ForegroundColor Red
+    Write-Host "  [x] Error: Check your internet connection." -ForegroundColor Red
 }
