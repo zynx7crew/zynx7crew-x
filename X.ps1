@@ -1,9 +1,12 @@
-# กำหนดค่าเข้ารหัสของ Console ให้เป็น UTF-8 และกำหนดโปรโตคอลความปลอดภัย TLS 1.2
+# กำหนดระบบเข้ารหัสของคอนโซลเป็น UTF-8 และโปรโตคอลความปลอดภัย TLS 1.2
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# ปิดการแจ้งเตือน Error ทั่วไปเพื่อความราบรื่น
+# ปิดการแสดงแถบดาวน์โหลดระบบของ Invoke-WebRequest (เพิ่มความเร็วการโหลด 10 เท่า และป้องกันอาการค้าง)
+$ProgressPreference = 'SilentlyContinue'
+
+# ปิดการแจ้งเตือนข้อผิดพลาดทั่วไปที่ไม่จำเป็น
 $ErrorActionPreference = "SilentlyContinue"
 
 # ตรวจสอบสิทธิ์ผู้ดูแลระบบ (Administrator)
@@ -12,7 +15,7 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Break
 }
 
-# ฟังก์ชันแสดงผลหลอดโหลดแบบพรีเมียม (ใช้ข้อความภาษาอังกฤษเพื่อป้องกันปัญหาฟอนต์ภาษาไทยเพี้ยนในทุกเครื่อง)
+# ฟังก์ชันแสดงผลหลอดโหลด (ใช้ภาษาอังกฤษล้วน 100% เพื่อไม่ให้เกิดกล่องสี่เหลี่ยมกลืนฟอนต์)
 function Show-ProgressBar {
     param (
         [int]$Percent,
@@ -22,11 +25,11 @@ function Show-ProgressBar {
     $done = [Math]::Floor(($Percent / 100) * $width)
     $left = $width - $done
     $bar = ("█" * $done) + ("░" * $left)
-    # แสดงหลอดดาวน์โหลดและเปอร์เซ็นต์แบบคมชัดสวยงาม
+    # แสดงสถานะหลอดโหลดบนบรรทัดเดียว
     Write-Host "`r  $Status [$bar] $Percent%  " -NoNewline -ForegroundColor Cyan
 }
 
-# เคลียร์หน้าจอคอนโซลให้สะอาด
+# เคลียร์หน้าต่างให้สะอาดที่สุด
 Clear-Host
 Write-Host ""
 Write-Host "  ================================================" -ForegroundColor Cyan
@@ -36,7 +39,7 @@ Write-Host ""
 
 # ขั้นที่ 1: กำลังตรวจสอบระบบ (0% - 20%)
 Show-ProgressBar 0 "Initializing system..."
-Start-Sleep -Milliseconds 300
+Start-Sleep -Milliseconds 200
 
 # 1. ปิดโหมดประหยัดพลังงาน USB
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
@@ -52,7 +55,7 @@ if (Test-Path $USBEnumPath) {
     }
 }
 Show-ProgressBar 20 "Optimizing hardware settings..."
-Start-Sleep -Milliseconds 400
+Start-Sleep -Milliseconds 200
 
 # ขั้นที่ 2: คืนค่าและรีสตาร์ทบริการ (20% - 50%)
 # 3. คืนค่า Registry ของเมาส์
@@ -69,7 +72,7 @@ foreach ($Service in $ServicesToFix) {
     Start-Service -Name $Service -ErrorAction SilentlyContinue
 }
 Show-ProgressBar 50 "Configuring system services..."
-Start-Sleep -Milliseconds 400
+Start-Sleep -Milliseconds 200
 
 # ขั้นที่ 3: รีเฟรชไดรเวอร์ (50% - 75%)
 # 5. ล้างประวัติไดรเวอร์ที่มีปัญหา
@@ -83,7 +86,7 @@ foreach ($Device in $TargetDevices) {
 # 6. สแกนฮาร์ดแวร์ใหม่
 pnputil /scan-devices | Out-Null
 Show-ProgressBar 75 "Connecting to server..."
-Start-Sleep -Milliseconds 400
+Start-Sleep -Milliseconds 200
 
 # ขั้นที่ 4: ดาวน์โหลด GUI (75% - 100%)
 $Url = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
@@ -110,7 +113,7 @@ try {
     # เปิดโปรแกรม GUI พร้อมระบุโฟลเดอร์ทำงาน
     Start-Process -FilePath $DestPath -WorkingDirectory (Split-Path $DestPath) -Verb RunAs
     
-    # ปิดตัวลงทันทีโดยไม่มีการรอหน่วงเวลา (exit)
+    # ปิดหน้าต่างคอนโซลลงทันทีแบบไม่ดีเลย์
     exit
 }
 catch {
