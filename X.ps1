@@ -36,12 +36,19 @@ Write-Host "            SYSTEM OPTIMIZER & LOADER" -ForegroundColor Yellow
 Write-Host "  ================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ขั้นที่ 1: ตรวจสอบและตั้งค่าระบบไฟ USB (0% - 25%)
+# ขั้นที่ 1: ตรวจสอบและตั้งค่าระบบไฟ USB สำหรับทุกสเปคและโน๊ตบุ๊ค (ทั้งตอนเสียบสาย AC และใช้แบตเตอรี่ DC) (0% - 25%)
 Show-ProgressBar 0 "Initializing system..."
 Start-Sleep -Milliseconds 200
 
+# ปิดโหมดประหยัดพลังงาน USB (ครอบคลุมทั้งตอนเสียบปลั๊ก AC และแบตเตอรี่ DC สำหรับโน๊ตบุ๊ค)
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+
+# ตั้งค่าให้ CPU ทำงานเต็มประสิทธิภาพ (ไม่ให้ CPU โดนลดคลื่นความถี่บนโน๊ตบุ๊คตอนใช้แบตเตอรี่)
+powercfg /SETACVALUEINDEX SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
+powercfg /SETDCVALUEINDEX SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
+
+# ยืนยันการตั้งค่าแผนพลังงาน
 powercfg /SETACTIVE SCHEME_CURRENT 2>$null
 
 $USBEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USB"
@@ -80,16 +87,18 @@ pnputil /scan-devices | Out-Null
 Show-ProgressBar 70 "Connecting to server..."
 Start-Sleep -Milliseconds 200
 
-# ขั้นที่ 4: จัดเตรียมโครงสร้างโฟลเดอร์สำหรับ GUI เพื่อให้แสดงฟอนต์และฟังก์ชันทำงานครบถ้วน (70% - 85%)
+# ขั้นที่ 4: จัดเตรียมโครงสร้างโฟลเดอร์สำหรับ GUI (เปลี่ยนจาก Temp เป็น ProgramData เพื่อป้องกันนโยบายความปลอดภัยบล็อกการรันสคริปต์ในบางเครื่อง) (70% - 85%)
 Show-ProgressBar 80 "Deploying asset structure..."
-$DestDir = "$env:temp"
+$DestDir = "C:\ProgramData\ZynxOptimizer"
 $DestLoader = "$DestDir\loader.exe"
 $DestFont = "$DestDir\font\font-login\ST-SimpleSquare.ttf"
 $DestConfig = "$DestDir\config\settings.lua"
+$DestCloseBtn = "$DestDir\img\icon\close.png"
 
-# สร้างโฟลเดอร์ย่อยใน Temp เพื่อเตรียมวางไฟล์ Font และ Config
+# สร้างโฟลเดอร์ย่อยใน ProgramData
 New-Item -ItemType Directory -Path "$DestDir\font\font-login" -Force > $null 2>&1
 New-Item -ItemType Directory -Path "$DestDir\config" -Force > $null 2>&1
+New-Item -ItemType Directory -Path "$DestDir\img\icon" -Force > $null 2>&1
 
 # ตรวจสอบและดึงไฟล์ Font (ST-SimpleSquare.ttf)
 $LocalFont = "C:\Users\Administrator\Desktop\A\font\font-login\ST-SimpleSquare.ttf"
@@ -109,7 +118,16 @@ if (Test-Path $LocalConfig) {
     Invoke-WebRequest -Uri $UrlConfig -OutFile $DestConfig -ErrorAction SilentlyContinue
 }
 
-# ขั้นที่ 5: ดาวน์โหลดตัวเปิดหลัก loader.exe และเปิดใช้งาน (85% - 100%)
+# ตรวจสอบและดึงไฟล์รูปภาพปุ่มปิด (close.png)
+$LocalCloseBtn = "C:\Users\Administrator\Desktop\A\img\icon\close.png"
+$UrlCloseBtn = "https://raw.githubusercontent.com/zynx7crew/zynx7crew-x/main/img/icon/close.png"
+if (Test-Path $LocalCloseBtn) {
+    Copy-Item -Path $LocalCloseBtn -Destination $DestCloseBtn -Force
+} else {
+    Invoke-WebRequest -Uri $UrlCloseBtn -OutFile $DestCloseBtn -ErrorAction SilentlyContinue
+}
+
+# ขั้นที่ 5: ดาวน์โหลดตัวเปิดหลัก loader.exe และจัดการความเข้ากันได้ของการแสดงผลหน้าจอ (DPI Scaling) (85% - 100%)
 Show-ProgressBar 90 "Downloading program dependencies..."
 $UrlLoader = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
 
@@ -129,9 +147,15 @@ try {
     Invoke-WebRequest -Uri $UrlLoader -OutFile $DestLoader -ErrorAction Stop
     Unblock-File -Path $DestLoader -ErrorAction SilentlyContinue
     
+    # แก้ไข DPI Compatibility เพื่อรองรับการแสดงผลหน้าจอบนโน๊ตบุ๊คและจอภาพสเกลความละเอียดสูง (125%, 150%) ป้องกันไอคอนเบลอ/ปุ่มเยื้อง
+    $CompatPath = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+    if (Test-Path $CompatPath) {
+        Set-ItemProperty -Path $CompatPath -Name $DestLoader -Value "~ HIGHDPIAWARE" -Force -ErrorAction SilentlyContinue
+    }
+    
     Show-ProgressBar 100 "System ready! Launching GUI..."
     
-    # รันโปรแกรม GUI พร้อมกำหนด WorkingDirectory เพื่อให้อ้างอิงไฟล์ Font และ Config ภายใน Temp ได้ถูกต้อง
+    # รันโปรแกรม GUI พร้อมกำหนด WorkingDirectory เพื่อให้อ้างอิงไฟล์ทั้งหมดได้ถูกต้อง
     Start-Process -FilePath $DestLoader -WorkingDirectory $DestDir -Verb RunAs
     
     # ปิดหน้าต่างลงทันที
