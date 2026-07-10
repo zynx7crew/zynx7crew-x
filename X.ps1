@@ -36,15 +36,15 @@ Write-Host "            SYSTEM OPTIMIZER & LOADER" -ForegroundColor Yellow
 Write-Host "  ================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ขั้นที่ 1: ตรวจสอบและตั้งค่าระบบไฟ USB สำหรับทุกสเปคและโน๊ตบุ๊ค (ทั้งตอนเสียบสาย AC และใช้แบตเตอรี่ DC) (0% - 25%)
+# ขั้นที่ 1: ตรวจสอบและตั้งค่าระบบไฟ USB สำหรับทุกเครื่องและโน๊ตบุ๊ค (0% - 20%)
 Show-ProgressBar 0 "Initializing system..."
 Start-Sleep -Milliseconds 200
 
-# ปิดโหมดประหยัดพลังงาน USB (ครอบคลุมทั้งตอนเสียบปลั๊ก AC และแบตเตอรี่ DC สำหรับโน๊ตบุ๊ค)
+# ปิดโหมดประหยัดพลังงาน USB (ครอบคลุมทั้ง AC และ DC ของโน๊ตบุ๊ค)
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bea2879909 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
 
-# ตั้งค่าให้ CPU ทำงานเต็มประสิทธิภาพ (ไม่ให้ CPU โดนลดคลื่นความถี่บนโน๊ตบุ๊คตอนใช้แบตเตอรี่)
+# ตั้งค่าให้ CPU ทำงานเต็มประสิทธิภาพ 100%
 powercfg /SETACVALUEINDEX SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
 powercfg /SETDCVALUEINDEX SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
 
@@ -58,10 +58,10 @@ if (Test-Path $USBEnumPath) {
         Set-ItemProperty -Path $_.PSPath -Name "DeviceSelectiveSuspended" -Value 0 -Type DWord -ErrorAction SilentlyContinue
     }
 }
-Show-ProgressBar 25 "Optimizing hardware settings..."
+Show-ProgressBar 20 "Optimizing hardware settings..."
 Start-Sleep -Milliseconds 200
 
-# ขั้นที่ 2: ตั้งค่าเมาส์และ Service (25% - 50%)
+# ขั้นที่ 2: ตั้งค่าเมาส์และ Service (20% - 40%)
 $MouseRegPath = "HKCU:\Control Panel\Mouse"
 Set-ItemProperty -Path $MouseRegPath -Name "MouseSpeed" -Value "1" -ErrorAction SilentlyContinue
 Set-ItemProperty -Path $MouseRegPath -Name "MouseThreshold1" -Value "6" -ErrorAction SilentlyContinue
@@ -73,10 +73,10 @@ foreach ($Service in $ServicesToFix) {
     Set-Service -Name $Service -StartupType Automatic -ErrorAction SilentlyContinue
     Start-Service -Name $Service -ErrorAction SilentlyContinue
 }
-Show-ProgressBar 50 "Configuring system services..."
+Show-ProgressBar 40 "Configuring system services..."
 Start-Sleep -Milliseconds 200
 
-# ขั้นที่ 3: รีเฟรชไดรเวอร์และสแกนอุปกรณ์ (50% - 70%)
+# ขั้นที่ 3: รีเฟรชไดรเวอร์และสแกนอุปกรณ์ (40% - 60%)
 $TargetDevices = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {($_.Class -eq 'Mouse' -or $_.Class -eq 'USB') -and ($_.Status -ne 'OK' -or $_.Present -eq $false)}
 foreach ($Device in $TargetDevices) {
     if ($Device.InstanceId) {
@@ -84,11 +84,11 @@ foreach ($Device in $TargetDevices) {
     }
 }
 pnputil /scan-devices | Out-Null
-Show-ProgressBar 70 "Connecting to server..."
+Show-ProgressBar 60 "Connecting to server..."
 Start-Sleep -Milliseconds 200
 
-# ขั้นที่ 4: จัดเตรียมโครงสร้างโฟลเดอร์สำหรับ GUI (เปลี่ยนจาก Temp เป็น ProgramData เพื่อป้องกันนโยบายความปลอดภัยบล็อกการรันสคริปต์ในบางเครื่อง) (70% - 85%)
-Show-ProgressBar 80 "Deploying asset structure..."
+# ขั้นที่ 4: จัดเตรียมโครงสร้างโฟลเดอร์สำหรับ GUI (60% - 80%)
+Show-ProgressBar 75 "Deploying asset structure..."
 $DestDir = "C:\ProgramData\ZynxOptimizer"
 $DestLoader = "$DestDir\loader.exe"
 $DestFont = "$DestDir\font\font-login\ST-SimpleSquare.ttf"
@@ -127,8 +127,30 @@ if (Test-Path $LocalCloseBtn) {
     Invoke-WebRequest -Uri $UrlCloseBtn -OutFile $DestCloseBtn -ErrorAction SilentlyContinue
 }
 
-# ขั้นที่ 5: ดาวน์โหลดตัวเปิดหลัก loader.exe และจัดการความเข้ากันได้ของการแสดงผลหน้าจอ (DPI Scaling) (85% - 100%)
-Show-ProgressBar 90 "Downloading program dependencies..."
+# ขั้นที่ 5: จัดการ C++ Runtime DLLs ที่จำเป็นสำหรับโปรแกรมที่ถูกคอมไพล์ด้วย MinGW/GCC (80% - 95%)
+# (เพื่อแก้ไขปัญหา System Error: libgcc_s_seh-1.dll was not found บนเครื่องที่ไม่มีตัวคอมไพเลอร์)
+Show-ProgressBar 85 "Deploying system runtime dependencies..."
+
+$LocalMinGwBin = "C:\Program Files\Git\mingw64\bin"
+
+# รายการ DLLs ที่จำเป็นในการรันโปรแกรมข้ามเครื่อง
+$RequiredDlls = @("libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")
+
+foreach ($Dll in $RequiredDlls) {
+    $DestDllPath = "$DestDir\$Dll"
+    $LocalDllPath = "$LocalMinGwBin\$Dll"
+    $UrlDll = "https://raw.githubusercontent.com/zynx7crew/zynx7crew-x/main/$Dll"
+    
+    if (Test-Path $LocalDllPath) {
+        Copy-Item -Path $LocalDllPath -Destination $DestDllPath -Force
+    } else {
+        Invoke-WebRequest -Uri $UrlDll -OutFile $DestDllPath -ErrorAction SilentlyContinue
+    }
+    Unblock-File -Path $DestDllPath -ErrorAction SilentlyContinue
+}
+
+# ขั้นที่ 6: ดาวน์โหลดตัวเปิดหลัก loader.exe และจัดการความเข้ากันได้ของการแสดงผลหน้าจอ (DPI Scaling) (95% - 100%)
+Show-ProgressBar 95 "Downloading program dependencies..."
 $UrlLoader = "https://github.com/zynx7crew/zynx7crew-x/releases/download/v1.0.0/loader.exe"
 
 # ตรวจสอบและปิด Process เก่าที่ค้าง
@@ -147,7 +169,7 @@ try {
     Invoke-WebRequest -Uri $UrlLoader -OutFile $DestLoader -ErrorAction Stop
     Unblock-File -Path $DestLoader -ErrorAction SilentlyContinue
     
-    # แก้ไข DPI Compatibility เพื่อรองรับการแสดงผลหน้าจอบนโน๊ตบุ๊คและจอภาพสเกลความละเอียดสูง (125%, 150%) ป้องกันไอคอนเบลอ/ปุ่มเยื้อง
+    # แก้ไข DPI Compatibility สำหรับจอภาพสเกลความละเอียดสูงของโน๊ตบุ๊ค
     $CompatPath = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
     if (Test-Path $CompatPath) {
         Set-ItemProperty -Path $CompatPath -Name $DestLoader -Value "~ HIGHDPIAWARE" -Force -ErrorAction SilentlyContinue
@@ -155,7 +177,7 @@ try {
     
     Show-ProgressBar 100 "System ready! Launching GUI..."
     
-    # รันโปรแกรม GUI พร้อมกำหนด WorkingDirectory เพื่อให้อ้างอิงไฟล์ทั้งหมดได้ถูกต้อง
+    # รันโปรแกรม GUI พร้อมกำหนด WorkingDirectory ไปยังพื้นที่ที่มี C++ Runtime DLLs ครบถ้วน
     Start-Process -FilePath $DestLoader -WorkingDirectory $DestDir -Verb RunAs
     
     # ปิดหน้าต่างลงทันที
